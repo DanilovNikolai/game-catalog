@@ -6,3 +6,166 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum EditionType {
+  standard
+  compilation
+
+  @@map("edition_type")
+}
+
+enum LanguageStatus {
+  known
+  none
+  unknown
+
+  @@map("language_status")
+}
+
+enum DownloadRequirement {
+  yes
+  no
+  recommended
+  unknown
+
+  @@map("download_requirement")
+}
+
+enum InternetRequirement {
+  required
+  not_required
+  online_modes_only
+  unknown
+
+  @@map("internet_requirement")
+}
+
+// Game platforms
+model Platform {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique @db.VarChar(100)
+  slug      String   @unique @db.VarChar(120)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  editions Edition[]
+
+  @@map("platforms")
+}
+
+// Edition regions
+model Region {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique @db.VarChar(100)
+  slug      String   @unique @db.VarChar(120)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  ratingSystems RegionRatingSystem[]
+
+  @@map("regions")
+}
+
+// Age rating systems
+model RatingSystem {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique @db.VarChar(100)
+  slug      String   @unique @db.VarChar(120)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  regions RegionRatingSystem[]
+
+  @@map("rating_systems")
+}
+
+// Allowed rating systems for each region
+model RegionRatingSystem {
+  regionId       String @map("region_id") @db.Uuid
+  ratingSystemId String @map("rating_system_id") @db.Uuid
+
+  region       Region       @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  ratingSystem RatingSystem @relation(fields: [ratingSystemId], references: [id], onDelete: Cascade)
+
+  editions Edition[]
+
+  @@id([regionId, ratingSystemId])
+  @@index([ratingSystemId])
+  @@map("region_rating_systems")
+}
+
+// Game publishers
+model Publisher {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique @db.VarChar(150)
+  slug      String   @unique @db.VarChar(170)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  editions Edition[]
+
+  @@map("publishers")
+}
+
+// Supported languages
+model Language {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code      String   @unique @db.VarChar(35)
+  name      String   @unique @db.VarChar(100)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("languages")
+}
+
+model Edition {
+  id   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name String @db.VarChar(255)
+  slug String @unique @db.VarChar(280)
+
+  editionType EditionType @map("edition_type")
+
+  platformId     String  @map("platform_id") @db.Uuid
+  regionId       String  @map("region_id") @db.Uuid
+  ratingSystemId String  @map("rating_system_id") @db.Uuid
+  publisherId    String? @map("publisher_id") @db.Uuid
+
+  releaseYear Int? @map("release_year")
+
+  productCode String? @map("product_code") @db.VarChar(50)
+  spineCode   String? @map("spine_code") @db.VarChar(50)
+  barcode     String? @db.VarChar(50)
+
+  audioLanguageStatus LanguageStatus @default(unknown) @map("audio_language_status")
+  textLanguageStatus  LanguageStatus @default(unknown) @map("text_language_status")
+
+  description String? @db.Text
+
+  requiresDownload    DownloadRequirement @default(unknown) @map("requires_download")
+  internetRequirement InternetRequirement @default(unknown) @map("internet_requirement")
+
+  technicalNotes String? @map("technical_notes") @db.Text
+
+  version Int @default(1)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  platform Platform @relation(fields: [platformId], references: [id], onDelete: Restrict)
+
+  regionRatingSystem RegionRatingSystem @relation(fields: [regionId, ratingSystemId], references: [regionId, ratingSystemId], onDelete: Restrict)
+
+  publisher Publisher? @relation(fields: [publisherId], references: [id], onDelete: Restrict)
+
+  @@index([platformId])
+  @@index([regionId, ratingSystemId])
+  @@index([publisherId])
+  @@index([deletedAt])
+  @@map("editions")
+}
