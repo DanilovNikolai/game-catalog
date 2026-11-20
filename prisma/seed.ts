@@ -136,6 +136,214 @@ async function main() {
     }
   }
 
+  // Roles
+const roles = [
+  {
+    name: "User",
+    slug: "user",
+    description: "Standard registered user",
+  },
+  {
+    name: "Moderator",
+    slug: "moderator",
+    description: "Catalog and community moderator",
+  },
+  {
+    name: "Admin",
+    slug: "admin",
+    description: "Administrator with full system access",
+  },
+];
+
+const roleIds = new Map<string, string>();
+
+for (const role of roles) {
+  const result = await prisma.role.upsert({
+    where: { slug: role.slug },
+    update: {
+      name: role.name,
+      description: role.description,
+    },
+    create: role,
+  });
+
+  roleIds.set(role.slug, result.id);
+}
+
+// Permissions
+const permissions = [
+  {
+    name: "View editions",
+    slug: "edition.view",
+    description: "View catalog editions",
+  },
+  {
+    name: "Propose edition creation",
+    slug: "edition.propose_create",
+    description: "Propose a new catalog edition",
+  },
+  {
+    name: "Propose edition updates",
+    slug: "edition.propose_update",
+    description: "Propose changes to an existing edition",
+  },
+  {
+    name: "Create editions",
+    slug: "edition.create",
+    description: "Create catalog editions directly",
+  },
+  {
+    name: "Update editions",
+    slug: "edition.update",
+    description: "Update catalog editions directly",
+  },
+  {
+    name: "Delete editions",
+    slug: "edition.delete",
+    description: "Soft-delete catalog editions",
+  },
+  {
+    name: "Restore editions",
+    slug: "edition.restore",
+    description: "Restore soft-deleted editions",
+  },
+  {
+    name: "View all proposals",
+    slug: "proposal.view_all",
+    description: "View all change proposals",
+  },
+  {
+    name: "Review proposals",
+    slug: "proposal.review",
+    description: "Approve or reject change proposals",
+  },
+  {
+    name: "Cancel own proposals",
+    slug: "proposal.cancel_own",
+    description: "Cancel own pending proposals",
+  },
+  {
+    name: "Manage dictionaries",
+    slug: "dictionary.manage",
+    description: "Manage catalog dictionaries",
+  },
+  {
+    name: "View users",
+    slug: "user.view",
+    description: "View user accounts",
+  },
+  {
+    name: "Suspend users",
+    slug: "user.suspend",
+    description: "Temporarily suspend user accounts",
+  },
+  {
+    name: "Ban users",
+    slug: "user.ban",
+    description: "Permanently ban user accounts",
+  },
+  {
+    name: "Manage user roles",
+    slug: "user.manage_roles",
+    description: "Assign and change user roles",
+  },
+  {
+    name: "Manage users",
+    slug: "user.manage",
+    description: "Manage user accounts",
+  },
+  {
+    name: "Create announcements",
+    slug: "announcement.create",
+    description: "Create site announcements",
+  },
+  {
+    name: "Update announcements",
+    slug: "announcement.update",
+    description: "Update site announcements",
+  },
+  {
+    name: "Archive announcements",
+    slug: "announcement.archive",
+    description: "Archive site announcements",
+  },
+];
+
+const permissionIds = new Map<string, string>();
+
+for (const permission of permissions) {
+  const result = await prisma.permission.upsert({
+    where: { slug: permission.slug },
+    update: {
+      name: permission.name,
+      description: permission.description,
+    },
+    create: permission,
+  });
+
+  permissionIds.set(permission.slug, result.id);
+}
+
+// Role permissions
+const rolePermissionMap: Record<string, string[]> = {
+  user: [
+    "edition.view",
+    "edition.propose_create",
+    "edition.propose_update",
+    "proposal.cancel_own",
+  ],
+
+  moderator: [
+    "edition.view",
+    "edition.propose_create",
+    "edition.propose_update",
+    "edition.create",
+    "edition.update",
+    "edition.delete",
+    "edition.restore",
+    "proposal.view_all",
+    "proposal.review",
+    "proposal.cancel_own",
+    "user.view",
+    "user.suspend",
+    "announcement.create",
+    "announcement.update",
+    "announcement.archive",
+  ],
+
+  admin: permissions.map((permission) => permission.slug),
+};
+
+for (const [roleSlug, permissionSlugs] of Object.entries(rolePermissionMap)) {
+  const roleId = roleIds.get(roleSlug);
+
+  if (!roleId) {
+    throw new Error(`Role not found: ${roleSlug}`);
+  }
+
+  for (const permissionSlug of permissionSlugs) {
+    const permissionId = permissionIds.get(permissionSlug);
+
+    if (!permissionId) {
+      throw new Error(`Permission not found: ${permissionSlug}`);
+    }
+
+    await prisma.rolePermission.upsert({
+      where: {
+        roleId_permissionId: {
+          roleId,
+          permissionId,
+        },
+      },
+      update: {},
+      create: {
+        roleId,
+        permissionId,
+      },
+    });
+  }
+}
+
   console.log("Seed completed successfully.");
 }
 
