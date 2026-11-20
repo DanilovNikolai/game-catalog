@@ -19,7 +19,6 @@ const regions = [
   { name: "Germany", slug: "germany" },
   { name: "Russia", slug: "russia" },
   { name: "United Kingdom", slug: "united-kingdom" },
-  { name: "China", slug: "china" },
   { name: "South Korea", slug: "south-korea" },
   { name: "Japan", slug: "japan" },
   { name: "Asia", slug: "asia" },
