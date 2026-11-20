@@ -54,6 +54,24 @@ enum EditionContentType {
   @@map("edition_content_type")
 }
 
+enum UserStatus {
+  active
+  suspended
+  banned
+
+  @@map("user_status")
+}
+
+enum UserModerationAction {
+  suspend
+  unsuspend
+  ban
+  unban
+  suspension_expired
+
+  @@map("user_moderation_action")
+}
+
 // Game platforms
 model Platform {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -260,4 +278,104 @@ model EditionCover {
   @@id([editionId, coverId])
   @@index([coverId])
   @@map("edition_covers")
+}
+
+model Role {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique @db.VarChar(100)
+  slug        String   @unique @db.VarChar(100)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique @db.VarChar(100)
+  slug        String   @unique @db.VarChar(100)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  roles RolePermission[]
+  users UserPermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserPermission {
+  userId       String @map("user_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, permissionId])
+  @@index([permissionId])
+  @@map("user_permissions")
+}
+
+model User {
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String  @map("display_name") @db.VarChar(100)
+  email         String  @db.VarChar(255)
+  emailVerified Boolean @default(false) @map("email_verified")
+  image         String? @db.Text
+
+  roleId String     @map("role_id") @db.Uuid
+  status UserStatus @default(active)
+
+  blockedAt    DateTime? @map("blocked_at") @db.Timestamptz(6)
+  blockedById  String?   @map("blocked_by_id") @db.Uuid
+  blockReason  String?   @map("block_reason") @db.Text
+  blockedUntil DateTime? @map("blocked_until") @db.Timestamptz(6)
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz(6)
+
+  role                       Role                    @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  blockedBy                  User?                   @relation("UserBlocker", fields: [blockedById], references: [id], onDelete: SetNull)
+  blockedUsers               User[]                  @relation("UserBlocker")
+  permissions                UserPermission[]
+  moderationActionsReceived  UserModerationHistory[] @relation("ModerationTarget")
+  moderationActionsPerformed UserModerationHistory[] @relation("ModerationActor")
+
+  @@index([roleId])
+  @@index([blockedById])
+  @@map("users")
+}
+
+model UserModerationHistory {
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  targetUserId  String  @map("target_user_id") @db.Uuid
+  performedById String? @map("performed_by_id") @db.Uuid
+
+  action UserModerationAction
+  reason String?              @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
+
+  targetUser  User  @relation("ModerationTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+  performedBy User? @relation("ModerationActor", fields: [performedById], references: [id], onDelete: SetNull)
+
+  @@index([targetUserId, createdAt])
+  @@index([performedById])
+  @@map("user_moderation_history")
 }
