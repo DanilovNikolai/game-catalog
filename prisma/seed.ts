@@ -345,46 +345,29 @@ async function main() {
   }
 
   // Collection edition types
+
   const collectionEditionTypes = [
-    {
-      name: "Standard",
-      slug: "standard",
-    },
-    {
-      name: "Deluxe",
-      slug: "deluxe",
-    },
-    {
-      name: "Collector's",
-      slug: "collectors",
-    },
-    {
-      name: "GOTY",
-      slug: "goty",
-    },
-    {
-      name: "Steelbook",
-      slug: "steelbook",
-    },
-    {
-      name: "Limited",
-      slug: "limited",
-    },
-    {
-      name: "Ultimate",
-      slug: "ultimate",
-    },
+    { name: "Standard", slug: "standard" },
+    { name: "Deluxe Edition", slug: "deluxe" },
+    { name: "Ultimate Edition", slug: "ultimate" },
+    { name: "GOTY Edition", slug: "goty" },
+    { name: "Complete Edition", slug: "complete" },
+    { name: "Definitive Edition", slug: "definitive" },
+    { name: "Collector's Edition", slug: "collectors" },
+    { name: "Gold Edition", slug: "gold" },
+    { name: "Special Edition", slug: "special" },
+    { name: "Day One Edition", slug: "day-one" },
+    { name: "Enhanced Edition", slug: "enhanced" },
+    { name: "Steelbook Edition", slug: "steelbook" },
+    { name: "Lenticular Edition", slug: "lenticular" },
+    { name: "Limited Edition", slug: "limited" },
+    { name: "Anniversary Edition", slug: "anniversary" },
   ];
 
   for (const editionType of collectionEditionTypes) {
     await prisma.collectionEditionType.upsert({
-      where: {
-        slug: editionType.slug,
-      },
-      update: {
-        name: editionType.name,
-        isActive: true,
-      },
+      where: { slug: editionType.slug },
+      update: { name: editionType.name, isActive: true },
       create: editionType,
     });
   }
