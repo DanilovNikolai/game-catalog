@@ -58,6 +58,7 @@ enum UserStatus {
   active
   suspended
   banned
+  deleted
 
   @@map("user_status")
 }
@@ -72,7 +73,86 @@ enum UserModerationAction {
   @@map("user_moderation_action")
 }
 
-// Game platforms
+enum ChangeProposalType {
+  create
+  update
+
+  @@map("change_proposal_type")
+}
+
+enum ChangeProposalStatus {
+  pending
+  approved
+  rejected
+  cancelled
+
+  @@map("change_proposal_status")
+}
+
+enum ModerationDecisionType {
+  approved
+  rejected
+
+  @@map("moderation_decision_type")
+}
+
+enum EditionChangeSource {
+  proposal
+  direct_edit
+
+  @@map("edition_change_source")
+}
+
+enum CollectionVisibility {
+  public
+  private
+  unlisted
+
+  @@map("collection_visibility")
+}
+
+enum CollectionCompleteness {
+  cib
+  loose
+  sealed
+
+  @@map("collection_completeness")
+}
+
+enum CollectionPlayStatus {
+  not_started
+  in_progress
+  completed
+
+  @@map("collection_play_status")
+}
+
+enum GamingPlatform {
+  playstation
+  xbox
+  nintendo
+
+  @@map("gaming_platform")
+}
+
+enum WishlistPriority {
+  low
+  normal
+  high
+
+  @@map("wishlist_priority")
+}
+
+enum AnnouncementStatus {
+  draft
+  published
+  archived
+
+  @@map("announcement_status")
+}
+
+//==========================================================================================//
+
 model Platform {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name      String   @unique @db.VarChar(100)
@@ -86,7 +166,6 @@ model Platform {
   @@map("platforms")
 }
 
-// Edition regions
 model Region {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name      String   @unique @db.VarChar(100)
@@ -100,7 +179,6 @@ model Region {
   @@map("regions")
 }
 
-// Age rating systems
 model RatingSystem {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name      String   @unique @db.VarChar(100)
@@ -114,7 +192,6 @@ model RatingSystem {
   @@map("rating_systems")
 }
 
-// Allowed rating systems for each region
 model RegionRatingSystem {
   regionId       String @map("region_id") @db.Uuid
   ratingSystemId String @map("rating_system_id") @db.Uuid
@@ -129,7 +206,6 @@ model RegionRatingSystem {
   @@map("region_rating_systems")
 }
 
-// Game publishers
 model Publisher {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name      String   @unique @db.VarChar(150)
@@ -143,7 +219,6 @@ model Publisher {
   @@map("publishers")
 }
 
-// Supported languages
 model Language {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   code      String   @unique @db.VarChar(35)
@@ -192,12 +267,19 @@ model Edition {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  platform           Platform           @relation(fields: [platformId], references: [id], onDelete: Restrict)
-  regionRatingSystem RegionRatingSystem @relation(fields: [regionId, ratingSystemId], references: [regionId, ratingSystemId], onDelete: Restrict)
-  publisher          Publisher?         @relation(fields: [publisherId], references: [id], onDelete: Restrict)
-  contents           EditionContent[]
-  languages          EditionLanguage[]
-  EditionCover       EditionCover?
+  platform            Platform               @relation(fields: [platformId], references: [id], onDelete: Restrict)
+  regionRatingSystem  RegionRatingSystem     @relation(fields: [regionId, ratingSystemId], references: [regionId, ratingSystemId], onDelete: Restrict)
+  publisher           Publisher?             @relation(fields: [publisherId], references: [id], onDelete: Restrict)
+  contents            EditionContent[]
+  languages           EditionLanguage[]
+  editionCover        EditionCover?
+  changeProposals     ChangeProposal[]       @relation("ProposalEdition")
+  createdFromProposal ChangeProposal?        @relation("ProposalResultingEdition")
+  changeHistory       EditionChangeHistory[]
+  collectionItems     CollectionItem[]
+  favorites           EditionFavorite[]
+  wishlistItems       WishlistItem[]
+  userViews           EditionUserView[]
 
   @@index([platformId])
   @@index([regionId, ratingSystemId])
@@ -249,7 +331,6 @@ model EditionContent {
   languages EditionContentLanguage[]
 
   @@unique([editionId, position])
-  @@index([editionId])
   @@map("edition_contents")
 }
 
@@ -269,13 +350,12 @@ model Cover {
 }
 
 model EditionCover {
-  editionId String @unique @map("edition_id") @db.Uuid
+  editionId String @id @map("edition_id") @db.Uuid
   coverId   String @map("cover_id") @db.Uuid
 
   edition Edition @relation(fields: [editionId], references: [id], onDelete: Cascade)
   cover   Cover   @relation(fields: [coverId], references: [id], onDelete: Restrict)
 
-  @@id([editionId, coverId])
   @@index([coverId])
   @@map("edition_covers")
 }
@@ -333,7 +413,7 @@ model UserPermission {
 model User {
   id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name          String  @map("display_name") @db.VarChar(100)
-  email         String  @db.VarChar(255)
+  email         String  @unique @db.VarChar(255)
   emailVerified Boolean @default(false) @map("email_verified")
   image         String? @db.Text
 
@@ -347,6 +427,7 @@ model User {
 
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
   lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz(6)
 
   role                       Role                    @relation(fields: [roleId], references: [id], onDelete: Restrict)
@@ -355,6 +436,18 @@ model User {
   permissions                UserPermission[]
   moderationActionsReceived  UserModerationHistory[] @relation("ModerationTarget")
   moderationActionsPerformed UserModerationHistory[] @relation("ModerationActor")
+  createdProposals           ChangeProposal[]        @relation("ProposalAuthor")
+  moderationDecisions        ModerationDecision[]    @relation("DecisionModerator")
+  editionChanges             EditionChangeHistory[]  @relation("EditionChangeActor")
+  collection                 UserCollection?
+  favorites                  EditionFavorite[]
+  wishlist                   WishlistItem[]
+  gamingProfiles             UserGamingProfile[]
+  editionViews               EditionUserView[]
+  notifications              Notification[]
+  announcementsCreated       Announcement[]
+  announcementReads          AnnouncementRead[]
+  auditLogs                  AuditLog[]
 
   @@index([roleId])
   @@index([blockedById])
@@ -378,4 +471,295 @@ model UserModerationHistory {
   @@index([targetUserId, createdAt])
   @@index([performedById])
   @@map("user_moderation_history")
+}
+
+model ChangeProposal {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  type   ChangeProposalType
+  status ChangeProposalStatus @default(pending)
+
+  editionId          String? @map("edition_id") @db.Uuid
+  resultingEditionId String? @unique @map("resulting_edition_id") @db.Uuid
+  collectionItemId   String? @map("collection_item_id") @db.Uuid
+
+  createdById String @map("created_by_id") @db.Uuid
+
+  proposedData Json @map("proposed_data") @db.JsonB
+  baseVersion  Int? @map("base_version")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  edition          Edition? @relation("ProposalEdition", fields: [editionId], references: [id], onDelete: Restrict)
+  resultingEdition Edition? @relation("ProposalResultingEdition", fields: [resultingEditionId], references: [id], onDelete: Restrict)
+
+  createdBy User @relation("ProposalAuthor", fields: [createdById], references: [id], onDelete: Restrict)
+
+  decision       ModerationDecision?
+  changeHistory  EditionChangeHistory?
+  collectionItem CollectionItem?       @relation(fields: [collectionItemId], references: [id], onDelete: SetNull)
+
+  @@index([createdById, createdAt])
+  @@index([editionId, status])
+  @@index([status, createdAt])
+  @@map("change_proposals")
+}
+
+model ModerationDecision {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  proposalId  String @unique @map("proposal_id") @db.Uuid
+  moderatorId String @map("moderator_id") @db.Uuid
+
+  decision ModerationDecisionType
+  comment  String?                @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  proposal  ChangeProposal @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  moderator User           @relation("DecisionModerator", fields: [moderatorId], references: [id], onDelete: Restrict)
+
+  @@index([moderatorId, createdAt])
+  @@map("moderation_decisions")
+}
+
+model EditionChangeHistory {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  editionId   String  @map("edition_id") @db.Uuid
+  proposalId  String? @unique @map("proposal_id") @db.Uuid
+  changedById String  @map("changed_by_id") @db.Uuid
+
+  source EditionChangeSource
+
+  oldData Json? @map("old_data") @db.JsonB
+  newData Json  @map("new_data") @db.JsonB
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  edition   Edition         @relation(fields: [editionId], references: [id], onDelete: Restrict)
+  proposal  ChangeProposal? @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  changedBy User            @relation("EditionChangeActor", fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@index([editionId, createdAt])
+  @@index([changedById])
+  @@map("edition_change_history")
+}
+
+model UserCollection {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+
+  name        String  @db.VarChar(100)
+  slug        String  @unique @db.VarChar(100)
+  description String? @db.Text
+
+  visibility CollectionVisibility @default(private)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CollectionItem[]
+
+  @@map("user_collections")
+}
+
+model CollectionEditionType {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique @db.VarChar(100)
+  slug      String   @unique @db.VarChar(100)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  items CollectionItem[]
+
+  @@map("collection_edition_types")
+}
+
+model CollectionItem {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  collectionId  String  @map("collection_id") @db.Uuid
+  editionId     String? @map("edition_id") @db.Uuid
+  editionTypeId String? @map("edition_type_id") @db.Uuid
+
+  conditionGrade Int                    @map("condition_grade")
+  completeness   CollectionCompleteness
+  personalRating Int?                   @map("personal_rating")
+  playStatus     CollectionPlayStatus   @default(not_started) @map("play_status")
+
+  acquiredAt DateTime? @map("acquired_at") @db.Date
+
+  purchasePrice    Decimal? @map("purchase_price") @db.Decimal(12, 2)
+  purchaseCurrency String?  @map("purchase_currency") @db.Char(3)
+
+  estimatedMarketValue Decimal?  @map("estimated_market_value") @db.Decimal(12, 2)
+  marketValueCurrency  String?   @map("market_value_currency") @db.Char(3)
+  valuationUpdatedAt   DateTime? @map("valuation_updated_at") @db.Timestamptz(6)
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  collection  UserCollection         @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  edition     Edition?               @relation(fields: [editionId], references: [id], onDelete: Restrict)
+  editionType CollectionEditionType? @relation(fields: [editionTypeId], references: [id], onDelete: Restrict)
+
+  proposals ChangeProposal[]
+
+  @@index([collectionId])
+  @@index([editionId])
+  @@index([editionTypeId])
+  @@map("collection_items")
+}
+
+model EditionFavorite {
+  userId    String   @map("user_id") @db.Uuid
+  editionId String   @map("edition_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  edition Edition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, editionId])
+  @@index([editionId])
+  @@map("edition_favorites")
+}
+
+model WishlistItem {
+  userId    String @map("user_id") @db.Uuid
+  editionId String @map("edition_id") @db.Uuid
+
+  priority WishlistPriority @default(normal)
+
+  targetPrice Decimal? @map("target_price") @db.Decimal(12, 2)
+  currency    String?  @db.Char(3)
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  edition Edition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, editionId])
+  @@index([editionId])
+  @@map("wishlist_items")
+}
+
+model UserGamingProfile {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  userId   String         @map("user_id") @db.Uuid
+  platform GamingPlatform
+
+  username   String  @db.VarChar(100)
+  profileUrl String? @map("profile_url") @db.Text
+
+  isPublic Boolean @default(false) @map("is_public")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform])
+  @@index([platform, username])
+  @@map("user_gaming_profiles")
+}
+
+model EditionUserView {
+  editionId String @map("edition_id") @db.Uuid
+  userId    String @map("user_id") @db.Uuid
+
+  firstViewedAt DateTime @default(now()) @map("first_viewed_at") @db.Timestamptz(6)
+  lastViewedAt  DateTime @default(now()) @map("last_viewed_at") @db.Timestamptz(6)
+
+  edition Edition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([editionId, userId])
+  @@index([userId, lastViewedAt])
+  @@map("edition_user_views")
+}
+
+model Notification {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  type    String @db.VarChar(100)
+  title   String @db.VarChar(255)
+  message String @db.Text
+  data    Json?  @db.JsonB
+
+  readAt    DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+model Announcement {
+  id          String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdById String @map("created_by_id") @db.Uuid
+
+  title   String @db.VarChar(255)
+  message String @db.Text
+
+  status AnnouncementStatus @default(draft)
+
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(6)
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  createdBy User               @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  reads     AnnouncementRead[]
+
+  @@index([status, publishedAt])
+  @@index([expiresAt])
+  @@map("announcements")
+}
+
+model AnnouncementRead {
+  announcementId String   @map("announcement_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  readAt         DateTime @default(now()) @map("read_at") @db.Timestamptz(6)
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, userId])
+  @@index([userId, readAt])
+  @@map("announcement_reads")
+}
+
+model AuditLog {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  actorId String? @map("actor_id") @db.Uuid
+
+  action     String  @db.VarChar(150)
+  targetType String  @map("target_type") @db.VarChar(100)
+  targetId   String? @map("target_id") @db.Uuid
+
+  details   Json?   @db.JsonB
+  ipAddress String? @map("ip_address") @db.Inet
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
