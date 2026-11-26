@@ -15,6 +15,7 @@ build/
 # Logs
 *.log
 npm-debug.log*
+tsconfig.tsbuildinfo
 
 # Local database and uploaded files
 storage/
