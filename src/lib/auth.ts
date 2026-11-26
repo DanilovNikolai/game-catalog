@@ -7,6 +7,12 @@ export const auth = betterAuth({
     provider: "postgresql",
   }),
 
+  advanced: {
+    database: {
+      generateId: "uuid",
+    },
+  },
+
   emailAndPassword: {
     enabled: true,
   },
